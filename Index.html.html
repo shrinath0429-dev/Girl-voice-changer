@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#171323">
+<title>AI Girl Voice — Free Voice Effects</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#171323,#28153b 60%,#401b42);color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;padding:22px 16px 40px}
+main{max-width:480px;margin:auto}.card{background:#ffffff12;border:1px solid #ffffff20;border-radius:22px;padding:18px;margin:14px 0;backdrop-filter:blur(10px)}
+h1{font-size:28px;margin:8px 0}p{color:#d7cde3;line-height:1.45}.sub{font-size:14px}.btn{border:0;border-radius:14px;padding:15px 16px;font-weight:700;font-size:16px;width:100%;margin:7px 0;background:#eaa5fa;color:#24132d}.btn.secondary{background:#ffffff18;color:white;border:1px solid #ffffff25}.btn:disabled{opacity:.5}
+.preset{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.preset button{border-radius:13px;padding:12px 5px;background:#ffffff12;border:1px solid #ffffff20;color:white}.preset button.active{background:#eaa5fa;color:#24132d;border-color:#eaa5fa}
+label{display:flex;justify-content:space-between;margin:17px 0 8px;font-size:14px}input[type=range]{width:100%;accent-color:#eaa5fa}
+.status{padding:11px;border-radius:12px;background:#ffffff10;color:#ded3e9;font-size:14px}.warn{font-size:12px;color:#c8b8d7}.meter{height:8px;background:#ffffff16;border-radius:8px;overflow:hidden;margin-top:12px}.meter i{display:block;height:100%;width:0;background:#eaa5fa;transition:width .1s}
+</style>
+</head>
+<body><main>
+<div style="font-size:13px;letter-spacing:2px;color:#eaa5fa">FREE • IPHONE WEB APP</div>
+<h1>🎙️ AI Girl Voice</h1><p class="sub">Live microphone effects & headphone monitoring. Use headphones to avoid feedback.</p>
+<div class="card">
+<div class="status" id="status">Tap Start and allow microphone access.</div>
+<button class="btn" id="start">▶ Start microphone</button>
+<button class="btn secondary" id="stop" disabled>■ Stop</button>
+<div class="meter"><i id="meter"></i></div>
+</div>
+<div class="card"><h3>Voice preset</h3><div class="preset">
+<button class="active" data-preset="soft">Soft</button><button data-preset="cute">Cute</button><button data-preset="natural">Natural</button>
+</div>
+<label>Brightness <span id="brightVal">50%</span></label><input id="bright" type="range" min="0" max="100" value="50">
+<label>Warmth <span id="warmVal">50%</span></label><input id="warm" type="range" min="0" max="100" value="50">
+<label>Effect / thickness <span id="effectVal">20%</span></label><input id="effect" type="range" min="0" max="100" value="20">
+</div>
+<div class="card"><h3>How to use</h3><p class="sub">1. Connect headphones. 2. Tap Start microphone and allow access. 3. Select a preset and adjust the controls. Your processed voice plays through your headphones.</p><p class="warn">This free prototype changes voice tone with EQ and a subtle effect; it does not perform full AI gender conversion or feed audio into Instagram/SIM calls. iPhone apps/websites cannot replace the system microphone for those calls.</p></div>
+</main>
+<script>
+let ctx, stream, src, hp, warmth, presence, delay, feedback, wet, dry, analyser, raf;
+const status=document.getElementById('status'), meter=document.getElementById('meter');
+const setStatus=s=>status.textContent=s;
+function apply(){
+ if(!ctx)return;
+ const b=+bright.value/100, w=+warm.value/100, e=+effect.value/100;
+ hp.frequency.value=100+ b*180;
+ warmth.frequency.value=220 + w*180;
+ warmth.gain.value=(w-.5)*7;
+ presence.frequency.value=2500 + b*1800;
+ presence.gain.value=2+b*5;
+ delay.delayTime.value=.012+e*.018;
+ feedback.gain.value=e*.12;
+ wet.gain.value=e*.22;
+ dry.gain.value=1-e*.12;
+ brightVal.textContent=bright.value+'%';warmVal.textContent=warm.value+'%';effectVal.textContent=effect.value+'%';
+}
+function meterLoop(){if(!analyser)return;let arr=new Uint8Array(analyser.frequencyBinCount);analyser.getByteTimeDomainData(arr);let sum=0;for(let v of arr){let d=(v-128)/128;sum+=d*d;}meter.style.width=Math.min(100,Math.sqrt(sum/arr.length)*350)+'%';raf=requestAnimationFrame(meterLoop)}
+start.onclick=async()=>{
+ try{
+ stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+ ctx=new (window.AudioContext||window.webkitAudioContext)();await ctx.resume();
+ src=ctx.createMediaStreamSource(stream);
+ hp=ctx.createBiquadFilter();hp.type='highpass';
+ warmth=ctx.createBiquadFilter();warmth.type='peaking';warmth.Q.value=.8;
+ presence=ctx.createBiquadFilter();presence.type='peaking';presence.Q.value=1;
+ delay=ctx.createDelay(.05);feedback=ctx.createGain();wet=ctx.createGain();dry=ctx.createGain();
+ analyser=ctx.createAnalyser();analyser.fftSize=256;
+ src.connect(hp);hp.connect(warmth);warmth.connect(presence);presence.connect(dry);dry.connect(ctx.destination);
+ presence.connect(delay);delay.connect(feedback);feedback.connect(delay);delay.connect(wet);wet.connect(ctx.destination);
+ presence.connect(analyser);apply();meterLoop();
+ start.disabled=true;stop.disabled=false;setStatus('Mic is live. Use headphones and adjust the presets.');
+ }catch(err){setStatus('Mic permission/error: '+err.message+' — use Safari on HTTPS and allow microphone access.')}
+};
+stop.onclick=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());if(ctx)ctx.close();cancelAnimationFrame(raf);ctx=null;stream=null;analyser=null;start.disabled=false;stop.disabled=true;meter.style.width='0';setStatus('Stopped.');};
+[bright,warm,effect].forEach(el=>el.addEventListener('input',apply));
+document.querySelectorAll('[data-preset]').forEach(btn=>btn.onclick=()=>{
+ document.querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+ if(btn.dataset.preset==='soft'){bright.value=35;warm.value=70;effect.value=12}
+ if(btn.dataset.preset==='cute'){bright.value=85;warm.value=30;effect.value=35}
+ if(btn.dataset.preset==='natural'){bright.value=55;warm.value=50;effect.value=8}
+ apply();
+});
+</script></body></html>
